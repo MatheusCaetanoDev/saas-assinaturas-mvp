@@ -1,0 +1,73 @@
+name: Integracao Continua
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: saas_mvp_test
+          POSTGRES_USER: saas
+          POSTGRES_PASSWORD: saas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U saas -d saas_mvp_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, pdo_sqlite, sqlite3, redis
+          coverage: none
+
+      - name: Instalar dependencias
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Preparar ambiente
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Executar migrations
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: saas_mvp_test
+          DB_USERNAME: saas
+          DB_PASSWORD: saas
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+          CACHE_STORE: array
+          QUEUE_CONNECTION: sync
+        run: php artisan migrate --force
+
+      - name: Executar testes
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          QUEUE_CONNECTION: sync
+          CACHE_STORE: array
+        run: php artisan test --colors=always
+
+      - name: Verificar estilo de codigo
+        run: ./vendor/bin/pint --test
