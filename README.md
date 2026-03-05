@@ -34,7 +34,9 @@ docker compose exec app php artisan key:generate
 docker compose exec app php artisan migrate --seed
 ```
 
-API: `http://localhost:8080`
+API: `http://localhost:8081`
+
+Se quiser trocar a porta local, defina `APP_PORT` no `.env` antes de subir os containers.
 
 ## Comandos uteis
 
@@ -102,7 +104,7 @@ Base URL: `/api/v1`
 Cadastro:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/autenticacao/cadastrar \
+curl -X POST http://localhost:8081/api/v1/autenticacao/cadastrar \
   -H 'Content-Type: application/json' \
   -d '{
     "nome": "Matheus",
@@ -115,7 +117,7 @@ curl -X POST http://localhost:8080/api/v1/autenticacao/cadastrar \
 Criar assinatura pro:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/assinaturas \
+curl -X POST http://localhost:8081/api/v1/assinaturas \
   -H 'Authorization: Bearer SEU_TOKEN' \
   -H 'Content-Type: application/json' \
   -d '{"codigo_plano":"pro"}'
@@ -124,7 +126,7 @@ curl -X POST http://localhost:8080/api/v1/assinaturas \
 Criar projeto:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/projetos \
+curl -X POST http://localhost:8081/api/v1/projetos \
   -H 'Authorization: Bearer SEU_TOKEN' \
   -H 'Content-Type: application/json' \
   -d '{"nome":"Projeto API"}'
