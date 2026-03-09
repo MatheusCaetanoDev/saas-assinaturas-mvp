@@ -33,6 +33,7 @@ class AutenticacaoController extends Controller
                 'email' => $dadosValidados['email'],
                 'senha' => Hash::make($dadosValidados['senha']),
                 'empresa_id' => $empresa->id,
+                'papel' => Usuario::PAPEL_OWNER,
             ]);
         });
 

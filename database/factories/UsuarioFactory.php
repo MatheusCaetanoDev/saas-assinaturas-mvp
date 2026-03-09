@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Usuario;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -28,6 +29,7 @@ class UsuarioFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verificado_em' => now(),
             'senha' => static::$senha ??= Hash::make('password'),
+            'papel' => Usuario::PAPEL_MEMBER,
             'remember_token' => Str::random(10),
         ];
     }

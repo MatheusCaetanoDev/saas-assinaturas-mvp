@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'autenticar.token_api' => \App\Http\Middleware\AutenticarComTokenApi::class,
+            'autorizar.papeis' => \App\Http\Middleware\AutorizarPapeisUsuario::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
