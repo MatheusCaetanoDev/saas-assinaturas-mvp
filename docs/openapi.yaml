@@ -1,0 +1,671 @@
+openapi: 3.0.3
+info:
+  title: SaaS de Assinaturas API
+  version: 1.1.0
+  description: >-
+    API de exemplo para gestao de assinaturas com tenancy por empresa,
+    autenticacao por token e regras de limite por plano.
+servers:
+  - url: http://localhost:8081/api/v1
+    description: Ambiente local via Docker
+
+tags:
+  - name: Saude
+  - name: Autenticacao
+  - name: Empresa
+  - name: Planos
+  - name: Assinaturas
+  - name: Projetos
+
+paths:
+  /saude:
+    get:
+      tags: [Saude]
+      summary: Verifica disponibilidade da API
+      responses:
+        '200':
+          description: API disponivel
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /autenticacao/cadastrar:
+    post:
+      tags: [Autenticacao]
+      summary: Cadastra usuario e empresa
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequisicaoCadastro'
+      responses:
+        '201':
+          description: Usuario cadastrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaAutenticacao'
+        '422':
+          $ref: '#/components/responses/RespostaValidacao'
+
+  /autenticacao/entrar:
+    post:
+      tags: [Autenticacao]
+      summary: Realiza login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequisicaoLogin'
+      responses:
+        '200':
+          description: Login realizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaAutenticacao'
+        '422':
+          $ref: '#/components/responses/RespostaErroPadrao'
+
+  /autenticacao/eu:
+    get:
+      tags: [Autenticacao]
+      summary: Retorna usuario autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Usuario autenticado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados:
+                    type: object
+                    properties:
+                      usuario:
+                        $ref: '#/components/schemas/Usuario'
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+
+  /autenticacao/sair:
+    post:
+      tags: [Autenticacao]
+      summary: Invalida token atual
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Logout efetuado
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+
+  /empresa:
+    get:
+      tags: [Empresa]
+      summary: Retorna dados da empresa do usuario autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Empresa encontrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados:
+                    type: object
+                    properties:
+                      empresa:
+                        $ref: '#/components/schemas/Empresa'
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+
+    put:
+      tags: [Empresa]
+      summary: Atualiza dados da empresa (apenas owner)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome]
+              properties:
+                nome:
+                  type: string
+                  example: Minha Empresa Atualizada
+      responses:
+        '200':
+          description: Empresa atualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensagem:
+                    type: string
+                  dados:
+                    type: object
+                    properties:
+                      empresa:
+                        $ref: '#/components/schemas/Empresa'
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+        '403':
+          $ref: '#/components/responses/RespostaProibido'
+        '422':
+          $ref: '#/components/responses/RespostaValidacao'
+
+  /planos:
+    get:
+      tags: [Planos]
+      summary: Lista planos ativos
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de planos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados:
+                    type: object
+                    properties:
+                      planos:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Plano'
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+
+  /assinaturas/atual:
+    get:
+      tags: [Assinaturas]
+      summary: Retorna assinatura e plano aplicavel
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Assinatura atual
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados:
+                    type: object
+                    properties:
+                      assinatura:
+                        nullable: true
+                        $ref: '#/components/schemas/Assinatura'
+                      plano:
+                        $ref: '#/components/schemas/Plano'
+                      projetos_restantes:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+
+  /assinaturas:
+    post:
+      tags: [Assinaturas]
+      summary: Cria ou troca assinatura (owner/admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [codigo_plano]
+              properties:
+                codigo_plano:
+                  type: string
+                  example: pro
+      responses:
+        '201':
+          description: Assinatura criada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensagem:
+                    type: string
+                  dados:
+                    type: object
+                    properties:
+                      assinatura:
+                        $ref: '#/components/schemas/Assinatura'
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+        '403':
+          $ref: '#/components/responses/RespostaProibido'
+        '422':
+          $ref: '#/components/responses/RespostaValidacao'
+
+  /assinaturas/cancelar:
+    post:
+      tags: [Assinaturas]
+      summary: Cancela assinatura ativa (owner/admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Assinatura cancelada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensagem:
+                    type: string
+                  dados:
+                    type: object
+                    properties:
+                      assinatura:
+                        $ref: '#/components/schemas/Assinatura'
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+        '403':
+          $ref: '#/components/responses/RespostaProibido'
+        '404':
+          $ref: '#/components/responses/RespostaErroPadrao'
+
+  /assinaturas/reativar:
+    post:
+      tags: [Assinaturas]
+      summary: Reativa ultima assinatura cancelada (owner/admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Assinatura reativada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensagem:
+                    type: string
+                  dados:
+                    type: object
+                    properties:
+                      assinatura:
+                        $ref: '#/components/schemas/Assinatura'
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+        '403':
+          $ref: '#/components/responses/RespostaProibido'
+        '404':
+          $ref: '#/components/responses/RespostaErroPadrao'
+
+  /projetos:
+    get:
+      tags: [Projetos]
+      summary: Lista projetos da empresa
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de projetos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados:
+                    type: object
+                    properties:
+                      projetos:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Projeto'
+                      projetos_restantes:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+
+    post:
+      tags: [Projetos]
+      summary: Cria projeto
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequisicaoProjeto'
+      responses:
+        '201':
+          description: Projeto criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensagem:
+                    type: string
+                  dados:
+                    type: object
+                    properties:
+                      projeto:
+                        $ref: '#/components/schemas/Projeto'
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+        '422':
+          $ref: '#/components/responses/RespostaValidacao'
+
+  /projetos/{projetoId}:
+    parameters:
+      - in: path
+        name: projetoId
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags: [Projetos]
+      summary: Exibe projeto da empresa
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Projeto encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dados:
+                    type: object
+                    properties:
+                      projeto:
+                        $ref: '#/components/schemas/Projeto'
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+        '404':
+          $ref: '#/components/responses/RespostaErroPadrao'
+
+    put:
+      tags: [Projetos]
+      summary: Atualiza projeto (owner/admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nome:
+                  type: string
+                  minLength: 2
+                descricao:
+                  type: string
+                  nullable: true
+                status:
+                  type: string
+                  enum: [rascunho, ativo, arquivado]
+      responses:
+        '200':
+          description: Projeto atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensagem:
+                    type: string
+                  dados:
+                    type: object
+                    properties:
+                      projeto:
+                        $ref: '#/components/schemas/Projeto'
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+        '403':
+          $ref: '#/components/responses/RespostaProibido'
+        '404':
+          $ref: '#/components/responses/RespostaErroPadrao'
+        '422':
+          $ref: '#/components/responses/RespostaValidacao'
+
+    delete:
+      tags: [Projetos]
+      summary: Remove projeto (owner/admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Projeto removido
+        '401':
+          $ref: '#/components/responses/RespostaNaoAutorizado'
+        '403':
+          $ref: '#/components/responses/RespostaProibido'
+        '404':
+          $ref: '#/components/responses/RespostaErroPadrao'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: TokenApi
+
+  responses:
+    RespostaErroPadrao:
+      description: Erro padrao da API
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroPadrao'
+    RespostaNaoAutorizado:
+      description: Token ausente/invalido/expirado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroPadrao'
+    RespostaProibido:
+      description: Usuario autenticado sem permissao
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroPadrao'
+    RespostaValidacao:
+      description: Falha de validacao
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              mensagem:
+                type: string
+              errors:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: string
+
+  schemas:
+    ErroPadrao:
+      type: object
+      properties:
+        mensagem:
+          type: string
+          example: Seu perfil nao tem permissao para esta operacao.
+
+    Empresa:
+      type: object
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        slug:
+          type: string
+
+    Usuario:
+      type: object
+      properties:
+        id:
+          type: integer
+        nome:
+          type: string
+        email:
+          type: string
+          format: email
+        papel:
+          type: string
+          enum: [owner, admin, member]
+        empresa_id:
+          type: integer
+          nullable: true
+        empresa:
+          $ref: '#/components/schemas/Empresa'
+
+    Plano:
+      type: object
+      properties:
+        id:
+          type: integer
+        codigo:
+          type: string
+        nome:
+          type: string
+        descricao:
+          type: string
+        limite_projetos:
+          type: integer
+        preco_mensal:
+          type: number
+          format: float
+
+    Assinatura:
+      type: object
+      properties:
+        id:
+          type: integer
+        empresa_id:
+          type: integer
+        plano_id:
+          type: integer
+        criado_por_usuario_id:
+          type: integer
+        status:
+          type: string
+          enum: [ativa, cancelada, expirada]
+        inicia_em:
+          type: string
+          format: date-time
+        termina_em:
+          type: string
+          format: date-time
+          nullable: true
+        cancelada_em:
+          type: string
+          format: date-time
+          nullable: true
+
+    Projeto:
+      type: object
+      properties:
+        id:
+          type: integer
+        empresa_id:
+          type: integer
+        nome:
+          type: string
+        descricao:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [rascunho, ativo, arquivado]
+
+    RequisicaoCadastro:
+      type: object
+      required: [nome, email, senha, nome_empresa]
+      properties:
+        nome:
+          type: string
+          example: Matheus
+        email:
+          type: string
+          format: email
+          example: matheus@teste.com
+        senha:
+          type: string
+          minLength: 8
+          example: segredo123
+        nome_empresa:
+          type: string
+          example: Caetano Dev
+
+    RequisicaoLogin:
+      type: object
+      required: [email, senha]
+      properties:
+        email:
+          type: string
+          format: email
+          example: matheus@teste.com
+        senha:
+          type: string
+          example: segredo123
+        nome_dispositivo:
+          type: string
+          example: notebook-dev
+
+    RequisicaoProjeto:
+      type: object
+      required: [nome]
+      properties:
+        nome:
+          type: string
+          minLength: 2
+          example: Projeto API
+        descricao:
+          type: string
+          nullable: true
+          example: Projeto principal do cliente
+        status:
+          type: string
+          enum: [rascunho, ativo, arquivado]
+
+    RespostaAutenticacao:
+      type: object
+      properties:
+        mensagem:
+          type: string
+        dados:
+          type: object
+          properties:
+            usuario:
+              $ref: '#/components/schemas/Usuario'
+        meta:
+          type: object
+          properties:
+            token:
+              type: string
+              example: 1|token-super-seguro
+            tipo_token:
+              type: string
+              example: Bearer
