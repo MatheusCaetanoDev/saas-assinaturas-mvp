@@ -1,18 +1,20 @@
 # SaaS de Assinaturas - API (Laravel)
 
 Esse repo eh um MVP de backend SaaS que eu montei para validar um fluxo real de assinaturas.
-A ideia foi fugir de CRUD simples e focar em regra de negócio: plano com limite de uso, ciclo de assinatura, autenticação por token e processamento assíncrono.
+A ideia foi fugir de CRUD simples e focar em regra de negocio: plano com limite de uso, ciclo de assinatura, autenticacao por token e processamento assincrono.
 
 ## O que tem aqui
 
 - Autenticacao com token Bearer
 - Tenant simples por empresa (cada usuario pertence a uma empresa)
-- Planos `grátis` e `pro`
+- RBAC basico com papeis `owner`, `admin` e `member`
+- Planos `gratis` e `pro`
 - Limite de projetos por plano
 - Ciclo de assinatura: criar, cancelar e reativar
 - Job para avisar assinatura proxima do vencimento
 - Ambiente dockerizado (app + nginx + postgres + redis)
 - CI no GitHub Actions (lint + testes)
+- OpenAPI versionada em `docs/openapi.yaml`
 
 ## Stack
 
@@ -56,6 +58,18 @@ docker compose exec app php artisan schedule:work
 docker compose exec app php artisan test
 ```
 
+## OpenAPI / Swagger
+
+Arquivo da especificacao:
+
+- `docs/openapi.yaml`
+
+Para visualizar em UI Swagger sem subir nada em VPS:
+
+1. Abra o Swagger Editor (online)
+2. Importe `docs/openapi.yaml`
+3. Teste os endpoints com o servidor local `http://localhost:8081/api/v1`
+
 ## Endpoints principais
 
 Base URL: `/api/v1`
@@ -71,21 +85,21 @@ Base URL: `/api/v1`
 
 ### Empresa
 - `GET /empresa`
-- `PUT /empresa`
+- `PUT /empresa` (somente `owner`)
 
 ### Planos e Assinaturas
 - `GET /planos`
 - `GET /assinaturas/atual`
-- `POST /assinaturas`
-- `POST /assinaturas/cancelar`
-- `POST /assinaturas/reativar`
+- `POST /assinaturas` (somente `owner/admin`)
+- `POST /assinaturas/cancelar` (somente `owner/admin`)
+- `POST /assinaturas/reativar` (somente `owner/admin`)
 
 ### Projetos
 - `GET /projetos`
 - `POST /projetos`
 - `GET /projetos/{projetoId}`
-- `PUT /projetos/{projetoId}`
-- `DELETE /projetos/{projetoId}`
+- `PUT /projetos/{projetoId}` (somente `owner/admin`)
+- `DELETE /projetos/{projetoId}` (somente `owner/admin`)
 
 ## Fluxo que eu uso para validar rapido
 
@@ -140,22 +154,23 @@ docker compose exec app php artisan test
 
 ## Scheduler e fila
 
-Comando que enfileira notificações de assinaturas próximas do vencimento:
+Comando que enfileira notificacoes de assinaturas proximas do vencimento:
 
 ```bash
 php artisan assinaturas:notificar-vencendo --dias=3
 ```
 
-## Decisões tecnicas
+## Decisoes tecnicas
 
-- Nomenclatura de domínio em português para deixar o contexto do projeto mais claro
-- Regra de negócio isolada em servico (`ServicoAssinatura`) para evitar controller gordo
+- Nomenclatura de dominio em portugues para deixar o contexto do projeto mais claro
+- Regra de negocio isolada em servico (`ServicoAssinatura`) para evitar controller gordo
 - Middleware proprio de token para manter controle sobre formato/expiracao
-- Plano `grátis` como fallback quando nao existe assinatura ativa
+- Middleware de RBAC por papel aplicado diretamente nas rotas sensiveis
+- Plano `gratis` como fallback quando nao existe assinatura ativa
 
 ## Proximos passos
 
-- RBAC (owner/admin/member)
+- Convite de usuarios por empresa (onboarding interno)
 - Chave de idempotencia para endpoints sensiveis
-- OpenAPI e colecao de requests versionada
 - Observabilidade (metricas e tracing)
+- Rate limiting por rota
