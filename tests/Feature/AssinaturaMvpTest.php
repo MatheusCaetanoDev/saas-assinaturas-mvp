@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Usuario;
 use Database\Seeders\PlanoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use Tests\TestCase;
 
@@ -31,7 +33,8 @@ class AssinaturaMvpTest extends TestCase
         $respostaCadastro
             ->assertCreated()
             ->assertJsonPath('dados.usuario.email', 'joao@example.com')
-            ->assertJsonPath('dados.usuario.empresa.nome', 'Acme Ltda');
+            ->assertJsonPath('dados.usuario.empresa.nome', 'Acme Ltda')
+            ->assertJsonPath('dados.usuario.papel', Usuario::PAPEL_OWNER);
 
         $token = $respostaCadastro->json('meta.token');
 
@@ -39,7 +42,8 @@ class AssinaturaMvpTest extends TestCase
             'Authorization' => "Bearer {$token}",
         ])
             ->assertOk()
-            ->assertJsonPath('dados.usuario.email', 'joao@example.com');
+            ->assertJsonPath('dados.usuario.email', 'joao@example.com')
+            ->assertJsonPath('dados.usuario.papel', Usuario::PAPEL_OWNER);
 
         $this->postJson('/api/v1/autenticacao/entrar', [
             'email' => 'joao@example.com',
@@ -54,7 +58,8 @@ class AssinaturaMvpTest extends TestCase
 
     public function test_limite_de_projetos_e_respeitado_no_plano_gratis_e_liberado_no_pro(): void
     {
-        $token = $this->cadastrarEObterToken();
+        $dadosOwner = $this->cadastrarUsuarioEObterDados();
+        $token = $dadosOwner['token'];
 
         for ($i = 1; $i <= 3; $i++) {
             $this->postJson('/api/v1/projetos', [
@@ -87,7 +92,8 @@ class AssinaturaMvpTest extends TestCase
 
     public function test_pode_cancelar_e_reativar_assinatura(): void
     {
-        $token = $this->cadastrarEObterToken();
+        $dadosOwner = $this->cadastrarUsuarioEObterDados();
+        $token = $dadosOwner['token'];
 
         $this->postJson('/api/v1/assinaturas', [
             'codigo_plano' => 'pro',
@@ -108,17 +114,114 @@ class AssinaturaMvpTest extends TestCase
             ->assertJsonPath('dados.assinatura.status', 'ativa');
     }
 
-    private function cadastrarEObterToken(): string
+    public function test_member_nao_pode_criar_ou_gerenciar_assinatura(): void
     {
+        $dadosOwner = $this->cadastrarUsuarioEObterDados();
+        $membro = $this->criarUsuarioNaEmpresa($dadosOwner['empresa_id'], Usuario::PAPEL_MEMBER);
+        $tokenMembro = $this->entrarEObterToken($membro->email);
+
+        $this->postJson('/api/v1/assinaturas', [
+            'codigo_plano' => 'pro',
+        ], [
+            'Authorization' => "Bearer {$tokenMembro}",
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('mensagem', 'Seu perfil nao tem permissao para esta operacao.');
+    }
+
+    public function test_member_nao_pode_atualizar_empresa(): void
+    {
+        $dadosOwner = $this->cadastrarUsuarioEObterDados();
+        $membro = $this->criarUsuarioNaEmpresa($dadosOwner['empresa_id'], Usuario::PAPEL_MEMBER);
+        $tokenMembro = $this->entrarEObterToken($membro->email);
+
+        $this->putJson('/api/v1/empresa', [
+            'nome' => 'Nova Razao Social',
+        ], [
+            'Authorization' => "Bearer {$tokenMembro}",
+        ])
+            ->assertForbidden()
+            ->assertJsonPath('mensagem', 'Seu perfil nao tem permissao para esta operacao.');
+    }
+
+    public function test_admin_pode_atualizar_e_remover_projeto_da_empresa(): void
+    {
+        $dadosOwner = $this->cadastrarUsuarioEObterDados();
+        $tokenOwner = $dadosOwner['token'];
+
+        $respostaProjeto = $this->postJson('/api/v1/projetos', [
+            'nome' => 'Projeto inicial',
+        ], [
+            'Authorization' => "Bearer {$tokenOwner}",
+        ]);
+
+        $respostaProjeto
+            ->assertCreated()
+            ->assertJsonPath('dados.projeto.nome', 'Projeto inicial');
+
+        $projetoId = $respostaProjeto->json('dados.projeto.id');
+
+        $admin = $this->criarUsuarioNaEmpresa($dadosOwner['empresa_id'], Usuario::PAPEL_ADMIN);
+        $tokenAdmin = $this->entrarEObterToken($admin->email);
+
+        $this->putJson("/api/v1/projetos/{$projetoId}", [
+            'nome' => 'Projeto atualizado por admin',
+            'status' => 'ativo',
+        ], [
+            'Authorization' => "Bearer {$tokenAdmin}",
+        ])
+            ->assertOk()
+            ->assertJsonPath('dados.projeto.nome', 'Projeto atualizado por admin')
+            ->assertJsonPath('dados.projeto.status', 'ativo');
+
+        $this->deleteJson("/api/v1/projetos/{$projetoId}", [], [
+            'Authorization' => "Bearer {$tokenAdmin}",
+        ])->assertNoContent();
+    }
+
+    /**
+     * @return array{token: string, empresa_id: int}
+     */
+    private function cadastrarUsuarioEObterDados(): array
+    {
+        $email = sprintf('owner-%s@example.com', uniqid());
+
         $resposta = $this->postJson('/api/v1/autenticacao/cadastrar', [
             'nome' => 'Maria Oliveira',
-            'email' => sprintf('maria-%s@example.com', uniqid()),
+            'email' => $email,
             'senha' => 'segredo123',
             'nome_empresa' => 'Empresa Teste',
         ]);
 
         $resposta->assertCreated();
 
-        return $resposta->json('meta.token');
+        return [
+            'token' => $resposta->json('meta.token'),
+            'empresa_id' => (int) $resposta->json('dados.usuario.empresa_id'),
+        ];
+    }
+
+    private function criarUsuarioNaEmpresa(int $empresaId, string $papel): Usuario
+    {
+        return Usuario::query()->create([
+            'nome' => sprintf('Usuario %s', $papel),
+            'email' => sprintf('%s-%s@example.com', $papel, uniqid()),
+            'senha' => Hash::make('segredo123'),
+            'empresa_id' => $empresaId,
+            'papel' => $papel,
+        ]);
+    }
+
+    private function entrarEObterToken(string $email): string
+    {
+        $respostaLogin = $this->postJson('/api/v1/autenticacao/entrar', [
+            'email' => $email,
+            'senha' => 'segredo123',
+            'nome_dispositivo' => 'suite-rbac',
+        ]);
+
+        $respostaLogin->assertOk();
+
+        return $respostaLogin->json('meta.token');
     }
 }
